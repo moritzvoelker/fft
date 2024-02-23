@@ -1,6 +1,8 @@
 #version 460 core
 layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
-layout(rg32f, binding = 0) uniform image1D fft_data;
+layout(std430, binding = 0) buffer Buffer {
+    vec2 data[];
+} fft_data;
 
 #define M_PI 3.1415926535897932384626433832795
 
@@ -44,11 +46,11 @@ vec2 c_pow(vec2 v, int exp) {
 }
 
 void butterfly(int base, int j, int elements, vec2 w, int block) {
-    vec2 a = imageLoad(fft_data, base + j).xy;
-    vec2 b = imageLoad(fft_data, base + j + elements / 2).xy;
+    vec2 a = fft_data.data[base + j];
+    vec2 b = fft_data.data[base + j + elements / 2];
     w = c_pow(w, j);
-    imageStore(fft_data, base + j, vec4(c_add(a, c_mul(w, b)), 0.0, 0.0));
-    imageStore(fft_data, base + j + elements / 2, vec4(c_sub(a, c_mul(w, b)), 0.0, 0.0));
+    fft_data.data[base + j] = c_add(a, c_mul(w, b));
+    fft_data.data[base + j + elements / 2] = c_sub(a, c_mul(w, b));
 }
 
 
@@ -63,11 +65,11 @@ void rearrange(void) {
         int offset = self & ~((-1) << (rounds - i));
         elements /= 2;
 
-        vec2 even = imageLoad(fft_data, self * 2).xy;
-        vec2 odd = imageLoad(fft_data, self * 2 + 1).xy;
+        vec2 even = fft_data.data[self * 2];
+        vec2 odd = fft_data.data[self * 2 + 1];
         memoryBarrierImage();
-        imageStore(fft_data, base + offset, vec4(even, 0.0, 0.0));
-        imageStore(fft_data, base + offset + elements, vec4(odd, 0.0, 0.0));
+        fft_data.data[base + offset] = even;
+        fft_data.data[base + offset + elements] = odd;
         memoryBarrierImage();
     }
 }

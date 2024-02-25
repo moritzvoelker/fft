@@ -7,45 +7,32 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "complex.h"
 #include "program.h"
 
 typedef struct Array {
     GLuint buffer;
-    GLuint elements;
-    GLuint dummy;
-    GLuint array;
     size_t len;
 } Array;
 
 Array create_array(size_t len) {
     Array array;
-    glGenBuffers(3, &array.buffer);
-    glGenVertexArrays(1, &array.array);
-    glBindVertexArray(array.array);
+    glGenBuffers(1, &array.buffer);
     array.len = len;
 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, array.buffer);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, array.elements);
-    GLuint *indices = malloc(sizeof(GLuint) * len);
-    for (size_t i = 0; i < len; i++) {
-        indices[i] = i;
-    }
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, len * sizeof(GLuint), indices, GL_STATIC_DRAW);
-    free(indices);
-
-    glBindBuffer(GL_ARRAY_BUFFER, array.dummy);
+    glBufferStorage(GL_SHADER_STORAGE_BUFFER, len * sizeof(Complex), NULL, GL_DYNAMIC_STORAGE_BIT);
 
     return array;
 }
 
-void update_array(Array *array, float *data) {
+void update_array(Array *array, Complex *data) {
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, array->buffer);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, array->len * sizeof(float) * 2, data, GL_DYNAMIC_DRAW);
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, array->len * sizeof(Complex), data);
 }
 
 void delete_array(Array array) {
-    glDeleteBuffers(3, &array.buffer);
+    glDeleteBuffers(1, &array.buffer);
 }
 
 void process_input(GLFWwindow *window) {
@@ -64,9 +51,18 @@ int main(void) {
     glViewport(0, 0, 1000, 1000);
 
     // init program with shaders
-    float compute_shader_data[] = {0.0,0.0, 1.0,0.0, 2.0,0.0, 3.0,0.0, 4.0,0.0, 5.0,0.0, 6.0,0.0, 7.0,0.0,};
+    Complex compute_shader_data[] = {
+        { 0.0,0.0 },
+        { 1.0,0.0 },
+        { 2.0,0.0 },
+        { 3.0,0.0 },
+        { 4.0,0.0 },
+        { 5.0,0.0 },
+        { 6.0,0.0 },
+        { 7.0,0.0 },
+    };
     size_t compute_shader_data_size = sizeof(compute_shader_data);
-    size_t compute_shader_data_len = compute_shader_data_size / sizeof(float) / 2;
+    size_t compute_shader_data_len = compute_shader_data_size / sizeof(Complex);
     Program compute_program = create_compute_program("src/compute_shader.glsl");
     Program render_program = create_render_program("src/vertex_shader.glsl", "src/fragment_shader.glsl");
     glUniform1ui(glGetUniformLocation(render_program.id, "n"), compute_shader_data_len);
@@ -87,8 +83,9 @@ int main(void) {
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         // draw result
+        glClearColor(0.0, 0.0, 0.0, 1.0);
         use_program(&render_program);
-        glDrawElements(GL_LINE_STRIP, compute_shader_data_len, GL_UNSIGNED_INT, NULL);
+        glDrawArrays(GL_LINE_STRIP, 0, compute_shader_data_len);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -98,7 +95,7 @@ int main(void) {
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, array.buffer);
     glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, compute_shader_data_size, compute_shader_data);
     for (size_t i = 0; i < compute_shader_data_len; i++) {
-        printf("(%f,%f),\n", compute_shader_data[i * 2], compute_shader_data[i * 2 + 1]);
+        printf("(%f,%f),\n", compute_shader_data[i].real, compute_shader_data[i].imaginary);
     }
     printf("\n");
 
